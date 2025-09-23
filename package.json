@@ -1,0 +1,16 @@
+{
+  "name": "babylonjs-farm-viewer",
+  "version": "1.0.0",
+  "description": "A first-person 3D viewer for farm terrain built with Babylon.js that loads OBJ/MTL mesh files and provides WASD+mouse controls for exploration.",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cannon-es": "^0.20.0"
+  }
+}

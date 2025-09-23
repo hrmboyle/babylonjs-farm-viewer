@@ -1,0 +1,14 @@
+newmtl 0
+Ka 1 1 1
+Kd 1 1 1
+d 1
+illum 1
+Ns 0
+map_Kd BlockXYA_0_0.jpg
+newmtl 1
+Ka 1 1 1
+Kd 1 1 1
+d 1
+illum 1
+Ns 0
+map_Kd BlockXYA_0_1.jpg

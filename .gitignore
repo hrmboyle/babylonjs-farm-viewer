@@ -1,0 +1,46 @@
+# Babylon.js Farm Viewer - Git Ignore
+
+# Asset files (these will be project-specific)
+assets/*.obj
+assets/*.mtl
+assets/*.jpg
+assets/*.png
+assets/*.jpeg
+assets/*.gif
+assets/*.bmp
+assets/*.tga
+
+# Keep the assets README
+!assets/README.md
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+
+# Coverage directory used by tools like istanbul
+coverage
+
+# Temporary folders
+tmp/
+temp/

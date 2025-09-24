@@ -20,6 +20,19 @@ class FarmViewer {
         this.keys = {};
         this.isPointerLocked = false;
         
+        // Mobile input state
+        this.isMobile = this.detectMobile();
+        this.mobileInput = {
+            movement: { x: 0, y: 0, active: false },
+            look: { x: 0, y: 0, active: false },
+            verticalUp: false,
+            verticalDown: false
+        };
+        this.touchState = {
+            movement: null,
+            look: null
+        };
+        
         // Terrain configuration - change this to load different terrain
         this.terrainName = "BlockAB"; // Available: BlockAB, BlockAYA, BlockAYX, BlockXB, BlockXYA, BlockXYX
         
@@ -415,7 +428,61 @@ class FarmViewer {
             }
         });
         
+        // Setup mobile touch controls if mobile device
+        if (this.isMobile) {
+            this.setupMobileControls();
+        }
+        
         console.log("Input controls setup complete");
+    }
+    
+    setupMobileControls() {
+        // Get mobile control elements
+        const movementJoystick = document.querySelector('[data-joystick="movement"]');
+        const lookJoystick = document.querySelector('[data-joystick="look"]');
+        const upButton = document.querySelector('[data-action="up"]');
+        const downButton = document.querySelector('[data-action="down"]');
+        
+        if (!movementJoystick || !lookJoystick) {
+            console.warn("Mobile controls not found");
+            return;
+        }
+        
+        // Setup movement joystick
+        this.setupJoystick(movementJoystick, 'movement');
+        
+        // Setup look joystick
+        this.setupJoystick(lookJoystick, 'look');
+        
+        // Setup vertical movement buttons
+        if (upButton) {
+            upButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.mobileInput.verticalUp = true;
+            });
+            upButton.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                this.mobileInput.verticalUp = false;
+            });
+        }
+        
+        if (downButton) {
+            downButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                this.mobileInput.verticalDown = true;
+            });
+            downButton.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                this.mobileInput.verticalDown = false;
+            });
+        }
+        
+        // Setup screen touch for camera rotation (fallback)
+        this.canvas.addEventListener('touchstart', this.handleCanvasTouchStart.bind(this));
+        this.canvas.addEventListener('touchmove', this.handleCanvasTouchMove.bind(this));
+        this.canvas.addEventListener('touchend', this.handleCanvasTouchEnd.bind(this));
+        
+        console.log("Mobile controls setup complete");
     }
 
     updateMovement() {
@@ -429,7 +496,7 @@ class FarmViewer {
         let movement = BABYLON.Vector3.Zero();
         let moved = false;
         
-        // WASD movement (horizontal)
+        // Desktop WASD movement (horizontal)
         if (this.keys['w']) {
             movement = movement.add(forward.scale(this.moveSpeed));
             moved = true;
@@ -447,14 +514,28 @@ class FarmViewer {
             moved = true;
         }
         
-        // Q/E vertical movement
+        // Mobile movement input
+        if (this.isMobile && this.mobileInput.movement.active) {
+            const mobileMovement = forward.scale(this.mobileInput.movement.y * this.moveSpeed)
+                .add(right.scale(this.mobileInput.movement.x * this.moveSpeed));
+            movement = movement.add(mobileMovement);
+            moved = true;
+        }
+        
+        // Q/E vertical movement (desktop) + mobile buttons
         let verticalMovement = 0;
         if (this.keys['q']) {
-            verticalMovement -= this.verticalSpeed; // Move down
+            verticalMovement -= this.verticalSpeed; // Move down (desktop)
+            moved = true;
+        } else if (this.isMobile && this.mobileInput.verticalDown) {
+            verticalMovement -= this.verticalSpeed * 0.5; // Move down (mobile - 50% slower)
             moved = true;
         }
         if (this.keys['e']) {
-            verticalMovement += this.verticalSpeed; // Move up
+            verticalMovement += this.verticalSpeed; // Move up (desktop)
+            moved = true;
+        } else if (this.isMobile && this.mobileInput.verticalUp) {
+            verticalMovement += this.verticalSpeed * 0.5; // Move up (mobile - 50% slower)
             moved = true;
         }
         
@@ -482,12 +563,31 @@ class FarmViewer {
             console.log(`Camera Position: X=${this.camera.position.x.toFixed(2)}, Y=${this.camera.position.y.toFixed(2)}, Z=${this.camera.position.z.toFixed(2)}`);
         }
     }
+    
+    updateMobileCameraRotation() {
+        if (!this.isMobile || !this.camera) return;
+        
+        // Handle mobile look input
+        if (this.mobileInput.look.active) {
+            const lookSensitivity = this.mouseSensitivity * 2; // Mobile might need higher sensitivity
+            
+            // Horizontal rotation (Y-axis)
+            this.camera.rotation.y += this.mobileInput.look.x * lookSensitivity;
+            
+            // Vertical rotation (X-axis) with limits - invert Y for intuitive up/down
+            this.camera.rotation.x -= this.mobileInput.look.y * lookSensitivity;
+            this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
+        }
+    }
 
     startRenderLoop() {
         // Main render loop
         this.engine.runRenderLoop(() => {
             // Update movement
             this.updateMovement();
+            
+            // Update mobile camera rotation
+            this.updateMobileCameraRotation();
             
             // Render scene
             this.scene.render();
@@ -507,7 +607,145 @@ class FarmViewer {
             loadingScreen.style.display = "none";
         }
     }
-
+    
+    /**
+     * Detect if device is mobile/touch-capable
+     */
+    detectMobile() {
+        return (
+            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+            ("ontouchstart" in window) ||
+            (navigator.maxTouchPoints > 0) ||
+            (window.innerWidth <= 768)
+        );
+    }
+    
+    /**
+     * Get touch position relative to element
+     */
+    getTouchPosition(touch, element) {
+        const rect = element.getBoundingClientRect();
+        return {
+            x: touch.clientX - rect.left,
+            y: touch.clientY - rect.top
+        };
+    }
+    
+    /**
+     * Convert joystick position to normalized values (-1 to 1)
+     */
+    normalizeJoystickInput(x, y, centerX, centerY, maxDistance) {
+        const deltaX = x - centerX;
+        const deltaY = y - centerY;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        
+        if (distance > maxDistance) {
+            return {
+                x: (deltaX / distance) * (maxDistance / maxDistance),
+                y: (deltaY / distance) * (maxDistance / maxDistance),
+                distance: maxDistance
+            };
+        }
+        
+        return {
+            x: deltaX / maxDistance,
+            y: deltaY / maxDistance,
+            distance: distance
+        };
+    }
+    
+    setupJoystick(element, type) {
+        const knob = element.querySelector('.joystick-knob');
+        const rect = element.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const maxDistance = (rect.width / 2) - 20; // Leave some margin
+        
+        let isDragging = false;
+        
+        const handleStart = (e) => {
+            e.preventDefault();
+            isDragging = true;
+            this.mobileInput[type].active = true;
+        };
+        
+        const handleMove = (e) => {
+            e.preventDefault();
+            if (!isDragging) return;
+            
+            const touch = e.touches ? e.touches[0] : e;
+            const pos = this.getTouchPosition(touch, element);
+            const normalized = this.normalizeJoystickInput(pos.x, pos.y, centerX, centerY, maxDistance);
+            
+            // Update input state
+            this.mobileInput[type].x = normalized.x;
+            this.mobileInput[type].y = -normalized.y; // Invert Y for correct direction
+            
+            // Update knob position
+            const knobX = centerX + (normalized.x * maxDistance);
+            const knobY = centerY + (-normalized.y * maxDistance); // Invert Y
+            knob.style.left = knobX + 'px';
+            knob.style.top = knobY + 'px';
+            knob.style.transform = 'translate(-50%, -50%)';
+        };
+        
+        const handleEnd = (e) => {
+            e.preventDefault();
+            isDragging = false;
+            
+            // Reset input
+            this.mobileInput[type].x = 0;
+            this.mobileInput[type].y = 0;
+            this.mobileInput[type].active = false;
+            
+            // Reset knob position
+            knob.style.left = '50%';
+            knob.style.top = '50%';
+            knob.style.transform = 'translate(-50%, -50%)';
+        };
+        
+        // Add event listeners
+        element.addEventListener('touchstart', handleStart, { passive: false });
+        element.addEventListener('touchmove', handleMove, { passive: false });
+        element.addEventListener('touchend', handleEnd, { passive: false });
+        element.addEventListener('touchcancel', handleEnd, { passive: false });
+        
+        // Also support mouse for testing on desktop
+        element.addEventListener('mousedown', handleStart);
+        element.addEventListener('mousemove', handleMove);
+        element.addEventListener('mouseup', handleEnd);
+        element.addEventListener('mouseleave', handleEnd);
+    }
+    
+    handleCanvasTouchStart(e) {
+        // Handle canvas touch for direct camera control if needed
+        // This could be used as a fallback or alternative method
+    }
+    
+    handleCanvasTouchMove(e) {
+        e.preventDefault();
+        if (!this.mobileInput.look.active && e.touches.length === 1) {
+            // If look joystick isn't being used, allow direct canvas touch for camera
+            const touch = e.touches[0];
+            if (this.lastTouch) {
+                const deltaX = touch.clientX - this.lastTouch.x;
+                const deltaY = touch.clientY - this.lastTouch.y;
+                
+                if (this.camera) {
+                    this.camera.rotation.y += deltaX * this.mouseSensitivity * 0.5;
+                    this.camera.rotation.x += deltaY * this.mouseSensitivity * 0.5;
+                    this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
+                }
+            }
+            
+            this.lastTouch = { x: touch.clientX, y: touch.clientY };
+        }
+    }
+    
+    handleCanvasTouchEnd(e) {
+        this.lastTouch = null;
+    }
+    
     showError(message) {
         const loadingScreen = document.getElementById("loadingScreen");
         if (loadingScreen) {
